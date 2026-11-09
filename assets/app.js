@@ -1,4 +1,4 @@
-/* FM Drops — site estático (GitHub Pages). Sem build: HTML + CSS + JS puro. */
+/* FMDrops Yugioh — site estático (GitHub Pages). Sem build: HTML + CSS + JS puro. */
 (function () {
   "use strict";
   const CFG = window.SITE_CONFIG || {};
@@ -90,6 +90,7 @@
   function toggle(set, id, label) {
     if (set.has(id)) set.delete(id); else set.add(id);
     saveSets(); toast(set.has(id) ? `${label}: adicionada` : `${label}: removida`);
+    if (set === S.owned && window.FMOnline && window.FMOnline.user) window.FMOnline.setOwned(id, set.has(id));
   }
   document.addEventListener("click", e => {
     const w = e.target.closest("[data-wish]"), o = e.target.closest("[data-own]");
@@ -107,6 +108,7 @@
   });
 
   // ---------- rotas ----------
+  const EXTRA_VIEWS = {};   // telas registradas por assets/online.js (ranking, jogador, conta)
   function route() {
     const h = location.hash.replace(/^#\/?/, "").split("/");
     return { name: h[0] || "cartas", arg: h[1] };
@@ -115,9 +117,9 @@
     const r = route();
     if (r.name === "doar") { history.replaceState(null, "", "#/cartas"); viewCards(); openDonate(); return; }
     document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.dataset.r === r.name ||
-      (r.name === "carta" && a.dataset.r === "cartas") || (r.name === "duelista" && a.dataset.r === "duelistas")));
+      (r.name === "carta" && a.dataset.r === "cartas") || (r.name === "duelista" && a.dataset.r === "duelistas") || (r.name === "jogador" && a.dataset.r === "ranking")));
     const v = { cartas: viewCards, carta: viewCard, duelistas: viewDuelists, duelista: viewDuelist, farm: viewFarm,
-      colecao: viewCollection, mudancas: viewChanges, sobre: viewAbout }[r.name] || viewCards;
+      colecao: viewCollection, mudancas: viewChanges, sobre: viewAbout, ...EXTRA_VIEWS }[r.name] || viewCards;
     v(r.arg);
   }
   window.addEventListener("hashchange", () => { render(); if (!["cartas"].includes(route().name)) window.scrollTo(0, 0); });
@@ -336,9 +338,14 @@
   // ---------- COLEÇÃO ----------
   function viewCollection() {
     const cats = Object.keys(CAT_PT).map(k => { const all = D.cards.filter(c => c.c === k); const o = all.filter(c => S.owned.has(c.id)).length; return [k, o, all.length]; });
-    const o = S.owned.size;
+    const o = S.owned.size, on = window.FMOnline, me = on && on.user;
+    let atk = 0, def = 0; S.owned.forEach(id => { atk += CARD[id].a || 0; def += CARD[id].d || 0; });
     $("#app").innerHTML = `
-      <section class="hero"><div><h1>Minha coleção</h1><p class="muted">Salva no seu navegador. Exporte para não perder ou levar para outro aparelho.</p></div>
+      <section class="hero"><div><h1>Minha coleção</h1><p class="muted">${me
+        ? `Sincronizada com a sua conta <b>${esc(on.username || "")}</b> — vale em qualquer aparelho. <a href="#/jogador/${encodeURIComponent(on.username || "")}">Ver meu perfil público</a>`
+        : `Salva só neste navegador. ${on && on.enabled ? `<button class="linklike" onclick="FMOnline.openAuth('login')">Entre ou crie uma conta</button> para salvar online e entrar no <a href="#/ranking">ranking</a>.` : "Exporte para não perder ou levar para outro aparelho."}`}</p>
+        <div class="kpis" style="margin-top:10px"><div class="kpi"><b>ATK ${atk.toLocaleString("pt-BR")}</b><span>soma do ATK das cartas marcadas</span></div>
+        <div class="kpi"><b>DEF ${def.toLocaleString("pt-BR")}</b><span>soma do DEF</span></div></div></div>
         <div class="row"><button class="btn" id="exp">Exportar</button><label class="btn">Importar<input type="file" id="imp" accept="application/json" hidden></label><button class="btn" id="rst">Zerar</button></div></section>
       <div class="panel"><div class="row" style="justify-content:space-between"><b>${o} / 722 cartas</b><span class="muted">${(o / 722 * 100).toFixed(1).replace(".", ",")}%</span></div>
         <div class="prog" style="margin:8px 0 14px"><i style="width:${o / 722 * 100}%"></i></div>
@@ -352,10 +359,19 @@
       const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "fm-colecao.json"; a.click();
     });
     $("#imp").addEventListener("change", async e => {
-      try { const j = JSON.parse(await e.target.files[0].text()); S.owned = new Set((j.owned || []).map(Number)); S.wish = new Set((j.wish || []).map(Number)); saveSets(); toast("Coleção importada"); viewCollection(); }
-      catch { toast("Arquivo inválido"); }
+      try {
+        const j = JSON.parse(await e.target.files[0].text());
+        const owned = new Set((j.owned || []).map(Number).filter(id => CARD[id]));
+        S.wish = new Set((j.wish || []).map(Number).filter(id => CARD[id]));
+        if (me) await on.replaceOwned(owned); else S.owned = owned;
+        saveSets(); toast("Coleção importada"); viewCollection();
+      } catch { toast("Arquivo inválido"); }
     });
-    $("#rst").addEventListener("click", () => { if (confirm("Apagar coleção e lista de desejos deste navegador?")) { S.owned.clear(); S.wish.clear(); saveSets(); viewCollection(); } });
+    $("#rst").addEventListener("click", async () => {
+      if (!confirm(me ? "Desmarcar TODAS as cartas da sua conta e limpar a lista de desejos?" : "Apagar coleção e lista de desejos deste navegador?")) return;
+      if (me) await on.replaceOwned(new Set()); else S.owned.clear();
+      S.wish.clear(); saveSets(); viewCollection();
+    });
   }
 
   // ---------- MUDANÇAS ----------
@@ -397,6 +413,12 @@
         Números, ATK/DEF, tipos e guardian stars das 722 cartas são idênticos entre o Mod 13 e o original — o mod altera só os drops (348 entradas).</p>
         <h3>Como funciona o drop</h3>
         <p>Ao vencer, o jogo sorteia <b>1 carta</b> do pool do duelista correspondente ao seu rank: S/A-POW (vitória por força), S/A-TEC (vitória técnica) ou B/C/D (ranks baixos). A chance é <i>N</i>/2048 por duelo.</p>
+        <h3 id="privacidade">Contas, ranking e privacidade</h3>
+        <p>A conta é opcional: sem ela, a coleção fica só no seu navegador. Com conta, guardamos apenas o <b>e-mail</b> (para entrar e recuperar a senha — nunca é exibido),
+        o <b>apelido</b> e as <b>cartas que você marcou</b>. O apelido, as cartas marcadas e a pontuação (ATK/DEF) são <b>públicos</b> no ranking.
+        As senhas são guardadas pelo Supabase (serviço de login) de forma criptografada; ninguém do site tem acesso a elas.
+        Você pode excluir sua conta e todos os dados a qualquer momento em <a href="#/conta">Minha conta</a>.</p>
+        <p class="small muted">O ranking é feito com o que cada jogador marca, sem verificação no jogo: vale a honestidade de cada um.</p>
         <h3>Imagens e marcas</h3>
         <p class="small muted">Imagens de cartas e personagens obtidas via Yugipedia. Yu-Gi-Oh! e Forbidden Memories são marcas e propriedade da Konami. Este é um projeto de fãs, sem fins comerciais e sem vínculo com a Konami.</p>
         ${CFG.repoUrl ? `<p><a href="${esc(CFG.repoUrl)}" target="_blank" rel="noopener">Código no GitHub</a></p>` : ""}
@@ -449,7 +471,7 @@
           <div class="copybox"><input type="text" readonly value="${esc(payload)}" id="pixCode"><button class="btn primary sm" id="pixCopy">Copiar</button></div>`;
       }
       $("#donateBody").innerHTML = `
-        <div class="dlg-head"><h2 style="margin:0">♥ Apoie o FM Drops</h2><button class="close" id="dclose" aria-label="Fechar">×</button></div>
+        <div class="dlg-head"><h2 style="margin:0">♥ Apoie o FMDrops Yugioh</h2><button class="close" id="dclose" aria-label="Fechar">×</button></div>
         <p class="small muted">O site é gratuito e sem anúncios. Se ele te ajudou a farmar, qualquer valor ajuda a manter e melhorar o projeto.</p>
         ${pixHtml}
         ${links.length ? `<h3 style="margin-top:14px">Outras formas</h3><div class="dlinks">${links.map(l => `<a class="btn" href="${esc(l.url)}" target="_blank" rel="noopener">${esc(l.label)}</a>`).join("")}</div>` : ""}
@@ -486,6 +508,8 @@
     D.duelists.forEach(d => DUEL[d.id] = d);
     D.rituals.forEach(r => { RIT_BY_RES[r.res] = r; RIT_BY_CARD[r.r] = r; });
     if (!D.pools[S.ver]) S.ver = "mod13";
+    window.FMD = { S, D, CARD, DUEL, render, route, toast, saveSets, esc, pad, img, EXTRA_VIEWS, STAR_PT, TYPE_PT, CAT_PT };
+    if (window.FMOnline) window.FMOnline.init();
     drawVer(); render();
   }).catch(() => { $("#app").innerHTML = `<div class="empty">Não foi possível carregar os dados. Se abriu o arquivo direto do disco, use um servidor local ou o GitHub Pages.</div>`; });
 })();

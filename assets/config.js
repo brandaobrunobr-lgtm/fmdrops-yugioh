@@ -10,13 +10,20 @@
  * Links com url vazia são ignorados.
  */
 window.SITE_CONFIG = {
-  siteName: "FM Drops",
-  repoUrl: "https://github.com/brandaobrunobr-lgtm/forbidden-memories-drops",
+  /* Login e ranking (Supabase): cole aqui a "Project URL" e a chave "anon public"
+     (Supabase > Project Settings > API). A chave anon é pública por natureza; a segurança
+     vem das regras do banco (supabase/schema.sql). NUNCA coloque aqui a chave "service_role". */
+  supabase: {
+    url: "",
+    anonKey: ""
+  },
+  siteName: "FMDrops Yugioh",
+  repoUrl: "https://github.com/brandaobrunobr-lgtm/fmdrops-yugioh",
   pix: {
     key: "",              // sua chave Pix
     name: "",             // nome do recebedor (sem acento)
     city: "",             // cidade (sem acento)
-    message: "Apoio FM Drops"
+    message: "Apoio FMDrops Yugioh"
   },
   links: [
     { label: "Ko-fi", url: "" },

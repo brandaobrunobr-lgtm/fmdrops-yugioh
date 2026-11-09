@@ -55,7 +55,7 @@ def page(rel_depth, title, desc, canon, og_img, body):
 <meta name="description" content="{e(desc)}">
 <link rel="canonical" href="{e(BASE + '/' + canon)}">
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="FM Drops">
+<meta property="og:site_name" content="FMDrops Yugioh">
 <meta property="og:title" content="{e(title)}">
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{e(BASE + '/' + canon)}">
@@ -65,18 +65,19 @@ def page(rel_depth, title, desc, canon, og_img, body):
 <link rel="icon" href="{up}img/cards/1.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=VT323&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{up}assets/style.css">
 <script>try{{var t=localStorage.getItem("fmd:theme");if(t)document.documentElement.setAttribute("data-theme",JSON.parse(t))}}catch(e){{}}</script>
 </head>
 <body>
 <header class="top"><div class="top-inner">
-  <a class="brand" href="{up}index.html#/cartas"><img src="{up}img/cards/1.jpg" alt=""><span>FM <b>Drops</b></span></a>
+  <a class="brand" href="{up}index.html#/cartas"><img src="{up}img/cards/1.jpg" alt=""><span>FMDrops <b>Yugioh</b></span></a>
   <nav class="nav">
     <a href="{up}cartas/index.html">Todas as cartas</a>
     <a href="{up}duelistas/index.html">Duelistas</a>
     <a href="{up}index.html#/farm">Farm</a>
     <a href="{up}index.html#/colecao">Coleção</a>
+    <a href="{up}index.html#/ranking">🏆 Ranking</a>
     <a href="{up}index.html#/mudancas">Mod 13 × Original</a>
   </nav>
   <div class="top-actions"><a class="btn-donate" href="{up}index.html#/doar" style="text-decoration:none">♥ Apoiar</a></div>
@@ -212,7 +213,7 @@ def card_index():
     body = f"""<section class="hero"><div><h1>Todas as 722 cartas do Forbidden Memories</h1>
 <p class="muted">Clique numa carta para ver quem dropa no Mod 13 e no jogo original. Para buscar e filtrar, use o <a href="{up}index.html">app interativo</a>.</p></div></section>
 {''.join(parts)}"""
-    return page(1, "Todas as 722 cartas — Yu-Gi-Oh! Forbidden Memories Mod 13 | FM Drops",
+    return page(1, "Todas as 722 cartas — Yu-Gi-Oh! Forbidden Memories Mod 13 | FMDrops Yugioh",
                 "Lista completa das 722 cartas do Yu-Gi-Oh! Forbidden Memories, com página de drops (Mod 13 e original) para cada uma.",
                 "cartas/index.html", "img/full/1.jpg", body)
 
@@ -222,7 +223,7 @@ def duel_index():
     body = f"""<section class="hero"><div><h1>Duelistas do Forbidden Memories</h1>
 <p class="muted">Os 39 oponentes e tudo o que cada um dropa, por rank, no Mod 13 e no jogo original.</p></div></section>
 <div class="dgrid">{tiles}</div>"""
-    return page(1, "Duelistas e drops — Yu-Gi-Oh! Forbidden Memories Mod 13 | FM Drops",
+    return page(1, "Duelistas e drops — Yu-Gi-Oh! Forbidden Memories Mod 13 | FMDrops Yugioh",
                 "Os 39 duelistas do Yu-Gi-Oh! Forbidden Memories e a tabela de drops de cada um por rank (S/A-POW, S/A-TEC, B/C/D).",
                 "duelistas/index.html", "img/duelists/seto.jpg", body)
 
@@ -251,7 +252,7 @@ write("robots.txt", f"User-agent: *\nAllow: /\nSitemap: {BASE}/sitemap.xml\n")
 # meta tags de compartilhamento no index.html (entre os marcadores)
 ip = os.path.join(ROOT, "index.html"); s = open(ip, encoding="utf-8").read()
 seo = (f'<!--SEO-->\n<link rel="canonical" href="{BASE}/">\n<meta property="og:type" content="website">\n'
-       f'<meta property="og:site_name" content="FM Drops">\n<meta property="og:title" content="FM Drops — drops do Yu-Gi-Oh! Forbidden Memories Mod 13">\n'
+       f'<meta property="og:site_name" content="FMDrops Yugioh">\n<meta property="og:title" content="FMDrops Yugioh — drops do Yu-Gi-Oh! Forbidden Memories Mod 13">\n'
        f'<meta property="og:description" content="Quem dropa cada uma das 722 cartas, por duelista e rank, no Mod 13 e no jogo original. Planejador de farm e coleção.">\n'
        f'<meta property="og:url" content="{BASE}/">\n<meta property="og:image" content="{BASE}/img/full/380.jpg">\n<meta name="twitter:card" content="summary">\n<!--/SEO-->')
 s = re.sub(r"<!--SEO-->.*?<!--/SEO-->", seo, s, flags=re.S) if "<!--SEO-->" in s else s.replace("</head>", seo + "\n</head>")
