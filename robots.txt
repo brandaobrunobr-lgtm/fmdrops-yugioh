@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://brandaobrunobr-lgtm.github.io/forbidden-memories-drops/sitemap.xml
