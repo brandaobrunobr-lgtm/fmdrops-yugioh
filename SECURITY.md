@@ -25,7 +25,7 @@ Auditoria feita em 09/11/2026, antes de ativar o login e o ranking.
 | 5 | Permissões do servidor conferidas | ✅ | `revoke all` em todas as tabelas para `anon` e `authenticated`, e cada permissão liberada uma a uma. Visitante não lê nem grava nenhuma tabela. Usuário logado só faz SELECT/DELETE nas próprias linhas e INSERT só das colunas `user_id` e `card_id`. Ninguém faz UPDATE em nada. |
 | 6 | Cada um só vê o seu usuário (exceto o ranking) | ✅ | RLS: `profiles` e `user_cards` só devolvem as linhas do próprio `auth.uid()`. A parte pública sai só pelas funções `leaderboard`, `player_profile` e `player_cards`, que devolvem apenas apelido, pontos e números de cartas, nunca o e-mail. |
 | 7 | Banco travado | ✅ | RLS ativo nas 3 tabelas. `card_stats` (ATK/DEF oficiais) não tem nenhuma política, então ninguém lê nem altera direto. Funções com `security definer` e `search_path = ''`. Execução de funções revogada por padrão e liberada uma a uma. `delete_my_account` só para usuário logado. |
-| 8 | Admin protegido | ⚠️ ação sua | O site não tem área de admin, portanto não há porta de admin para atacar. Os "admins" reais são a sua conta do **Supabase** e a do **GitHub**: ative a verificação em 2 etapas (2FA) nas duas. |
+| 8 | Admin protegido | ✅ | O site não tem área de admin, portanto não há porta de admin para atacar. Os "admins" reais são as contas do **Supabase** e do **GitHub**: as duas estão com verificação em 2 etapas (2FA) por app autenticador desde 09/11/2026. |
 | 9 | Debug desligado | ✅ | Sem `console.log`, sem modo debug e sem mapas de código. O simulador de testes não vai para o site. |
 | 10 | Erros sem detalhes | ✅ | Erros do servidor são traduzidos para mensagens curtas em português, e qualquer erro desconhecido vira uma mensagem genérica. As mensagens não revelam se um e-mail tem conta (cadastro e "esqueci a senha" respondem igual). |
 | 11 | Tudo validado no servidor | ✅ | **Apelido:** regex `^[A-Za-z0-9_.-]{3,20}$` no banco (CHECK e trigger), lista de nomes reservados (admin, suporte…) e unicidade sem diferenciar maiúsculas. **Carta:** só de 1 a 722 (chave estrangeira). **Data da marcação:** sempre do relógio do servidor, então ninguém forja o desempate. **Pontuação:** calculada no banco. **Senha:** mínimo e regras no Supabase Auth (ver "Configurações no painel"). O navegador valida antes só para dar resposta rápida. |
@@ -48,8 +48,10 @@ Auditoria feita em 09/11/2026, antes de ativar o login e o ranking.
    - *Password requirements*: "Letters and digits".
 2. **Authentication → Rate Limits:** revisar os limites de cadastro e login por IP. Os padrões já são razoáveis.
 3. **Authentication → Sign In / Providers:** manter *Allow anonymous sign-ins* desligado.
-4. **Advisors → Security Advisor:** rodar e confirmar que não aparece nenhum alerta.
-5. **Conta do Supabase e do GitHub:** ligar o 2FA.
+4. **Advisors → Security Advisor:** rodado em 09/11/2026 — **0 erros** e 11 avisos, todos esperados:
+   - *Public / Signed-In Users Can Execute SECURITY DEFINER Function* (10): `leaderboard`, `player_profile`, `player_cards` e `username_available` são a parte pública do site e devolvem só apelido, pontos e números de cartas. `change_username` e `delete_my_account` só agem na conta de quem está logado (confirmado pelos testes 16 e 23 a 25).
+   - *Leaked Password Protection Disabled* (1): recurso exclusivo dos planos pagos. Compensado no site pela recusa de senhas comuns e pela regra de 8+ caracteres com letras e números.
+5. **Conta do Supabase e do GitHub:** 2FA ligado nas duas.
 
 ## Privacidade (LGPD), cookies e acessibilidade
 
