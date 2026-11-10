@@ -4,6 +4,7 @@
   "use strict";
   const CFG = (window.SITE_CONFIG || {}).supabase || {};
   const USER_RE = /^[A-Za-z0-9_.-]{3,20}$/;
+  const POLICY_VERSION = "2026-11-09";   // mesma versão de assets/app.js (Política de Privacidade)
   const $ = (s, el = document) => el.querySelector(s);
   const fmt = n => Number(n || 0).toLocaleString("pt-BR");
   let sb = null, F = null;   // cliente Supabase, API do app (window.FMD)
@@ -11,14 +12,16 @@
   const ERR = [
     [/invalid login credentials/i, "E-mail ou senha incorretos."],
     [/email not confirmed/i, "Confirme seu e-mail: abra o link que enviamos e depois entre."],
-    [/user already registered|already been registered/i, "Este e-mail já tem conta. Use \"Entrar\" ou \"Esqueci a senha\"."],
-    [/password should be at least|weak password/i, "Senha fraca: use pelo menos 8 caracteres, misturando letras e números."],
+    [/user already registered|already been registered/i, "Não foi possível criar a conta com esse e-mail. Se ela já existe, use \"Entrar\" ou \"Esqueci a senha\"."],
+    [/password should|weak password|password is known|pwned/i, "Senha fraca ou muito comum: use pelo menos 8 caracteres, com letras e números."],
+    [/same_password|should be different/i, "A nova senha precisa ser diferente da atual."],
+    [/expired|invalid.*(token|link)|otp/i, "O link expirou ou já foi usado. Peça outro."],
     [/rate limit|too many/i, "Muitas tentativas. Aguarde alguns minutos e tente de novo."],
-    [/database error saving new user|duplicate key|profiles_username/i, "Esse apelido já está em uso. Escolha outro."],
+    [/database error saving new user|duplicate key|profiles_username|invalid username|reserved username/i, "Esse apelido já está em uso ou não é permitido. Escolha outro."],
     [/network|fetch/i, "Sem conexão com o servidor. Verifique sua internet."],
   ];
   const mine = m => Object.assign(new Error(m), { mine: true });
-  const tr = e => { const m = (e && (e.message || e.error_description || e)) + ""; const f = ERR.find(([r]) => r.test(m)); return f ? f[1] : "Erro: " + m; };
+  const tr = e => { const m = (e && (e.message || e.error_description || e)) + ""; const f = ERR.find(([r]) => r.test(m)); return f ? f[1] : "Não foi possível concluir agora. Tente novamente em instantes."; };
 
   const On = window.FMOnline = {
     enabled: !!(CFG.url && CFG.anonKey && window.supabase),
@@ -26,12 +29,13 @@
 
     init() {
       F = window.FMD;
-      Object.assign(F.EXTRA_VIEWS, { ranking: viewRanking, jogador: viewPlayer, conta: viewAccount });
+      Object.assign(F.EXTRA_VIEWS, { ranking: viewRanking, jogador: viewPlayer, conta: viewAccount,
+        entrar: () => viewAuth("login"), cadastro: () => viewAuth("signup"), recuperar: () => viewAuth("forgot"), "nova-senha": () => viewAuth("newpass") });
       drawHeader();
       if (!On.enabled) return;
       sb = window.supabase.createClient(CFG.url, CFG.anonKey, { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, flowType: "implicit" } });
       sb.auth.onAuthStateChange((event, session) => {
-        if (event === "PASSWORD_RECOVERY") { cleanHash(); openAuth("newpass"); }
+        if (event === "PASSWORD_RECOVERY") { recovering = true; cleanHash(); location.hash = "#/nova-senha"; }
         setTimeout(() => handleSession(session, event), 0);
       });
     },
@@ -70,7 +74,7 @@
     const was = On.user && On.user.id;
     On.user = session ? session.user : null;
     if (!On.user) { On.username = null; drawHeader(); if (was) F.render(); return; }
-    if (was === On.user.id && event !== "SIGNED_IN") { drawHeader(); return; }
+    if (was === On.user.id && (event !== "SIGNED_IN" || quiet)) { drawHeader(); return; }
     try {
       const { data: p } = await sb.from("profiles").select("username").eq("id", On.user.id).maybeSingle();
       On.username = p ? p.username : (On.user.user_metadata || {}).username || "jogador";
@@ -87,7 +91,7 @@
       try { localStorage.setItem(key, "1"); } catch { /* */ }
       F.S.owned = server; F.saveSets();
       cleanHash(); F.render();
-      if (event === "SIGNED_IN") F.toast(`Bem-vindo, ${On.username}!`);
+      if (event === "SIGNED_IN" && !recovering) { F.toast(`Bem-vindo, ${On.username}!`); if (["entrar", "cadastro"].includes(F.route().name)) goNext(); }
     } catch (e) { F.toast(tr(e)); }
   }
 
@@ -108,72 +112,175 @@
     el.querySelectorAll(".umenu-list a").forEach(a => a.addEventListener("click", () => el.querySelector("details").removeAttribute("open")));
   }
 
-  // ---------- diálogo de login/cadastro ----------
+  // ---------- limite de tentativas (no navegador; o limite real fica no servidor do Supabase) ----------
+  const RL = {
+    get(k) { try { return JSON.parse(localStorage.getItem("fmd:rl:" + k)) || { n: 0, until: 0 }; } catch { return { n: 0, until: 0 }; } },
+    put(k, v) { try { localStorage.setItem("fmd:rl:" + k, JSON.stringify(v)); } catch { /* */ } },
+    wait(k) { return Math.max(0, Math.ceil((RL.get(k).until - Date.now()) / 1000)); },
+    fail(k, free, base) { const v = RL.get(k); v.n++; if (v.n >= free) v.until = Date.now() + Math.min(900, base * 2 ** (v.n - free)) * 1000; RL.put(k, v); },
+    hold(k, secs) { const v = RL.get(k); v.until = Date.now() + secs * 1000; RL.put(k, v); },
+    clear(k) { try { localStorage.removeItem("fmd:rl:" + k); } catch { /* */ } },
+  };
+  const human = s => s >= 60 ? `${Math.ceil(s / 60)} min` : `${s} s`;
+
+  // ---------- validação (o servidor valida de novo: apelido no banco, senha no Supabase Auth) ----------
+  const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
+  function checkPassword(pw, ctx = {}) {
+    if (pw.length < 8) return "A senha precisa ter pelo menos 8 caracteres.";
+    if (pw.length > 72) return "A senha pode ter no máximo 72 caracteres.";
+    if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return "Use letras e números na senha.";
+    const low = pw.toLowerCase();
+    if (ctx.user && low.includes(ctx.user.toLowerCase())) return "A senha não pode conter o seu apelido.";
+    const local = (ctx.email || "").split("@")[0].toLowerCase();
+    if (local.length >= 4 && low.includes(local)) return "A senha não pode conter o seu e-mail.";
+    if (/^(.)\1+$/.test(pw) || /^(12345678|123456789|abcd1234|senha123|password1|qwerty12)/i.test(pw)) return "Senha muito fácil de adivinhar.";
+    return "";
+  }
+  function strength(pw) {
+    let s = 0; if (pw.length >= 8) s++; if (pw.length >= 12) s++; if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++; if (/\d/.test(pw)) s++; if (/[^A-Za-z0-9]/.test(pw)) s++;
+    return Math.min(4, s);
+  }
+
+  // ---------- TELA DE LOGIN / CADASTRO / RECUPERAÇÃO (páginas próprias) ----------
+  const AUTH_ROUTE = { login: "entrar", signup: "cadastro", forgot: "recuperar", newpass: "nova-senha" };
+  let recovering = false, quiet = false;   // quiet: reautenticação ao trocar senha (não recarrega a tela)   // true quando o usuário chegou pelo link "esqueci a senha"
   function openAuth(mode) {
     if (!On.enabled) return F.toast("Login ainda não configurado neste site.");
-    let dlg = $("#authDlg");
-    if (!dlg) { dlg = document.createElement("dialog"); dlg.id = "authDlg"; dlg.className = "dlg"; document.body.appendChild(dlg);
-      dlg.addEventListener("click", e => { if (e.target === dlg) dlg.close(); }); }
-    const T = { login: "Entrar", signup: "Criar conta", forgot: "Recuperar senha", newpass: "Nova senha" };
-    const tabs = mode === "newpass" ? "" : `<div class="tabs" style="margin:6px 0 10px">${["login", "signup"].map(m => `<span class="chip${m === mode ? " on" : ""}" data-m="${m}">${T[m]}</span>`).join("")}</div>`;
-    const f = {
-      login: `<label>E-mail<input type="email" name="email" autocomplete="email" required></label>
-              <label>Senha<input type="password" name="pw" autocomplete="current-password" required></label>
-              <button class="btn primary" type="submit">Entrar</button>
-              <button class="linklike" type="button" data-m="forgot">Esqueci a senha</button>`,
-      signup: `<label>Apelido (aparece no ranking)<input name="user" maxlength="20" autocomplete="nickname" required placeholder="3 a 20 letras, números, _ . -"></label>
-              <label>E-mail (não aparece para ninguém)<input type="email" name="email" autocomplete="email" required></label>
-              <label>Senha<input type="password" name="pw" minlength="8" autocomplete="new-password" required placeholder="mínimo 8 caracteres"></label>
-              <label>Repita a senha<input type="password" name="pw2" minlength="8" autocomplete="new-password" required></label>
-              <label class="chk"><input type="checkbox" name="ok" required> Li e aceito a <a href="#/sobre" target="_blank">política de privacidade</a> (apelido e cartas ficam públicos no ranking).</label>
-              <button class="btn primary" type="submit">Criar conta</button>`,
-      forgot: `<p class="small muted">Enviaremos um link para você criar uma nova senha.</p>
-              <label>E-mail<input type="email" name="email" autocomplete="email" required></label>
-              <button class="btn primary" type="submit">Enviar link</button>
-              <button class="linklike" type="button" data-m="login">Voltar para entrar</button>`,
-      newpass: `<label>Nova senha<input type="password" name="pw" minlength="8" autocomplete="new-password" required></label>
-              <label>Repita a nova senha<input type="password" name="pw2" minlength="8" autocomplete="new-password" required></label>
-              <button class="btn primary" type="submit">Salvar nova senha</button>`,
+    const cur = F.route().name;
+    if (!Object.values(AUTH_ROUTE).includes(cur)) { try { sessionStorage.setItem("fmd:next", location.hash || "#/colecao"); } catch { /* */ } }
+    location.hash = "#/" + AUTH_ROUTE[mode];
+  }
+  function goNext() {
+    let n = "#/colecao"; try { n = sessionStorage.getItem("fmd:next") || n; sessionStorage.removeItem("fmd:next"); } catch { /* */ }
+    if (!/^#\/[a-z-]+(\/[^/]*)?$/.test(n) || Object.values(AUTH_ROUTE).some(r => n.startsWith("#/" + r))) n = "#/colecao";
+    location.hash = n;
+  }
+
+  const pwField = (name, label, ac, extra = "") => `<label>${label}<span class="pw-wrap">
+      <input type="password" name="${name}" autocomplete="${ac}" maxlength="72" required ${extra}>
+      <button type="button" class="pw-eye" aria-label="Mostrar senha" title="Mostrar senha">👁</button></span></label>`;
+
+  function viewAuth(mode) {
+    const app = $("#app");
+    if (!On.enabled) { app.innerHTML = `<div class="empty">Contas ainda não ativadas neste site.</div>`; return; }
+    if (On.user && mode !== "newpass") { goNext(); return; }
+    if (mode === "newpass" && !On.user && recovering) { app.innerHTML = authShell("newpass", `<p class="muted">Validando o link…</p>`); return; }
+    if (mode === "newpass" && !On.user) {
+      app.innerHTML = authShell("newpass", `<p class="msg err">O link para criar uma nova senha expirou ou já foi usado. Peça outro.</p>
+        <a class="btn primary" href="#/recuperar">Pedir novo link</a>`); return;
+    }
+    const T = {
+      login: ["Entrar", "Acesse sua conta para salvar a coleção e aparecer no ranking."],
+      signup: ["Criar conta", "Grátis. Só o apelido aparece para os outros jogadores."],
+      forgot: ["Recuperar senha", "Enviaremos um link para você criar uma nova senha."],
+      newpass: [recovering ? "Criar nova senha" : "Trocar senha", recovering ? "Escolha a nova senha da sua conta." : "Confirme a senha atual e escolha a nova."],
+    };
+    const body = {
+      login: `<label>E-mail<input type="email" name="email" autocomplete="email" inputmode="email" maxlength="254" required autofocus></label>
+        ${pwField("pw", "Senha", "current-password")}
+        <button class="btn primary big-btn" type="submit">Entrar</button>
+        <div class="auth-links"><a href="#/recuperar">Esqueci a senha</a><a href="#/cadastro">Não tenho conta</a></div>`,
+      signup: `<label>Apelido <span class="hint">aparece no ranking · 3 a 20: letras, números, _ . -</span>
+          <input name="user" maxlength="20" autocomplete="nickname" required autofocus></label>
+        <label>E-mail <span class="hint">não aparece para ninguém</span><input type="email" name="email" autocomplete="email" inputmode="email" maxlength="254" required></label>
+        ${pwField("pw", 'Senha <span class="hint">8+ caracteres, com letras e números</span>', "new-password")}
+        <div class="pw-meter" aria-hidden="true"><i></i></div>
+        ${pwField("pw2", "Repita a senha", "new-password")}
+        <label class="chk"><input type="checkbox" name="ok" required> <span>Li a <a href="#/privacidade" target="_blank" rel="noopener">Política de Privacidade</a> e concordo que meu <b>apelido</b>, minhas <b>cartas marcadas</b> e minha <b>pontuação</b> fiquem públicos no ranking.</span></label>
+        <label class="chk"><input type="checkbox" name="age" required> <span>Tenho 18 anos ou mais, ou tenho autorização da minha mãe, pai ou responsável.</span></label>
+        <button class="btn primary big-btn" type="submit">Criar conta</button>
+        <div class="auth-links"><a href="#/entrar">Já tenho conta</a></div>`,
+      forgot: `<label>E-mail da conta<input type="email" name="email" autocomplete="email" inputmode="email" maxlength="254" required autofocus></label>
+        <button class="btn primary big-btn" type="submit">Enviar link</button>
+        <div class="auth-links"><a href="#/entrar">Voltar para entrar</a></div>`,
+      newpass: `${recovering ? "" : pwField("cur", "Senha atual", "current-password")}
+        ${pwField("pw", 'Nova senha <span class="hint">8+ caracteres, com letras e números</span>', "new-password")}
+        <div class="pw-meter" aria-hidden="true"><i></i></div>
+        ${pwField("pw2", "Repita a nova senha", "new-password")}
+        <button class="btn primary big-btn" type="submit">Salvar nova senha</button>
+        ${recovering ? "" : `<div class="auth-links"><a href="#/conta">Cancelar</a></div>`}`,
     }[mode];
-    dlg.innerHTML = `<div class="dlg-body"><div class="dlg-head"><h2 style="margin:0">${T[mode]}</h2><button class="close" aria-label="Fechar">×</button></div>
-      ${tabs}<form class="authf" novalidate>${f}<p class="msg" role="alert"></p></form></div>`;
-    dlg.querySelector(".close").onclick = () => dlg.close();
-    dlg.querySelectorAll("[data-m]").forEach(b => b.onclick = () => openAuth(b.dataset.m));
-    const form = dlg.querySelector("form"), msg = dlg.querySelector(".msg");
+    app.innerHTML = authShell(mode, `<h1>${T[mode][0]}</h1><p class="muted">${T[mode][1]}</p>
+      <form class="authf" novalidate>${body}<p class="msg" role="alert" aria-live="assertive"></p></form>`);
+    const form = $(".authf"), msg = $(".authf .msg");
     const say = (t, ok) => { msg.textContent = t; msg.className = "msg" + (ok ? " ok" : " err"); };
+    form.querySelectorAll(".pw-eye").forEach(b => b.onclick = () => {
+      const i = b.previousElementSibling, show = i.type === "password";
+      i.type = show ? "text" : "password"; b.setAttribute("aria-label", show ? "Esconder senha" : "Mostrar senha"); b.classList.toggle("on", show);
+    });
+    const meter = form.querySelector(".pw-meter i");
+    if (meter) form.pw.addEventListener("input", () => { const s = strength(form.pw.value); meter.style.width = (s / 4 * 100) + "%"; meter.dataset.s = s; });
+
+    const RLK = { login: "login", signup: "signup", forgot: "forgot", newpass: "newpass" }[mode];
     form.onsubmit = async ev => {
       ev.preventDefault();
-      const v = Object.fromEntries(new FormData(form)); const btn = form.querySelector("[type=submit]");
-      if (!form.checkValidity()) { const bad = form.querySelector(":invalid"); say(bad && bad.name === "ok" ? "Marque o aceite da política de privacidade." : "Preencha todos os campos corretamente."); return; }
-      if (v.pw2 !== undefined && v.pw !== v.pw2) return say("As senhas não são iguais.");
+      const btn = form.querySelector("[type=submit]");
+      if (btn.disabled) return;
+      const w = RL.wait(RLK);
+      if (w) return say(`Muitas tentativas. Aguarde ${human(w)} e tente de novo.`);
+      const v = {}; new FormData(form).forEach((val, key) => { v[key] = typeof val === "string" ? val : ""; });
+      const email = (v.email || "").trim().toLowerCase(), user = (v.user || "").trim();
+      // validação no navegador (rápida); o servidor valida tudo de novo
+      if ("email" in v && !EMAIL_RE.test(email)) return say("Digite um e-mail válido.");
+      if (mode === "login" && !v.pw) return say("Digite a sua senha.");
+      if (mode === "signup") {
+        if (!USER_RE.test(user)) return say("Apelido inválido: use 3 a 20 letras, números, _ . ou -");
+        const p = checkPassword(v.pw, { user, email }); if (p) return say(p);
+        if (v.pw !== v.pw2) return say("As senhas não são iguais.");
+        if (!form.ok.checked) return say("Para criar conta, é preciso concordar com a Política de Privacidade.");
+        if (!form.age.checked) return say("Confirme a idade ou a autorização do responsável.");
+      }
+      if (mode === "newpass") {
+        if (!recovering && !v.cur) return say("Digite a senha atual.");
+        const p = checkPassword(v.pw, { user: On.username, email: On.user && On.user.email }); if (p) return say(p);
+        if (v.pw !== v.pw2) return say("As senhas não são iguais.");
+        if (!recovering && v.cur === v.pw) return say("A nova senha precisa ser diferente da atual.");
+      }
       btn.disabled = true; say("Aguarde…", true);
       try {
         const site = location.origin + location.pathname;
         if (mode === "login") {
-          const { error } = await sb.auth.signInWithPassword({ email: v.email.trim(), password: v.pw });
-          if (error) throw error; dlg.close();
+          const { error } = await sb.auth.signInWithPassword({ email, password: v.pw });
+          if (error) { if (/invalid login/i.test(error.message || "")) RL.fail(RLK, 5, 30); throw error; }
+          RL.clear(RLK);   // o redirecionamento acontece em handleSession
         } else if (mode === "signup") {
-          const user = v.user.trim();
-          if (!USER_RE.test(user)) throw mine("Apelido inválido: use 3 a 20 letras, números, _ . ou -");
+          RL.hold(RLK, 60);
           const { data: free, error: e1 } = await sb.rpc("username_available", { name: user });
-          if (e1) throw e1; if (!free) throw mine("Esse apelido já está em uso. Escolha outro.");
-          const { data, error } = await sb.auth.signUp({ email: v.email.trim(), password: v.pw, options: { data: { username: user }, emailRedirectTo: site } });
+          if (e1) throw e1; if (!free) throw mine("Esse apelido já está em uso ou não é permitido. Escolha outro.");
+          const { data, error } = await sb.auth.signUp({ email, password: v.pw, options: { data: { username: user, privacy_version: POLICY_VERSION, privacy_accepted_at: new Date().toISOString(), age_confirmed: true }, emailRedirectTo: site } });
           if (error) throw error;
-          if (data.session) dlg.close();
-          else form.innerHTML = `<p class="msg ok">Conta criada! Enviamos um e-mail para <b>${F.esc(v.email.trim())}</b>. Abra o link de confirmação e depois entre com seu e-mail e senha.</p>`;
+          if (!data.session) form.innerHTML = `<p class="msg ok">Quase lá! Se o e-mail <b>${F.esc(email)}</b> ainda não tiver conta, você vai receber um link de confirmação. Abra o link e depois entre com seu e-mail e senha. Confira também o spam.</p>
+            <a class="btn primary big-btn" href="#/entrar">Ir para Entrar</a>`;
         } else if (mode === "forgot") {
-          const { error } = await sb.auth.resetPasswordForEmail(v.email.trim(), { redirectTo: site });
+          RL.hold(RLK, 60);
+          const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: site });
           if (error) throw error;
-          form.innerHTML = `<p class="msg ok">Se existir uma conta com esse e-mail, você vai receber o link em instantes. Confira também o spam.</p>`;
+          form.innerHTML = `<p class="msg ok">Se existir uma conta com esse e-mail, o link chega em instantes. Confira também o spam.</p>
+            <a class="btn big-btn" href="#/entrar">Voltar para entrar</a>`;
         } else if (mode === "newpass") {
+          if (!recovering) {
+            quiet = true;
+            const { error: e0 } = await sb.auth.signInWithPassword({ email: On.user.email, password: v.cur }).finally(() => setTimeout(() => { quiet = false; }, 500));
+            if (e0) { RL.fail(RLK, 5, 30); throw mine("Senha atual incorreta."); }
+          }
           const { error } = await sb.auth.updateUser({ password: v.pw });
-          if (error) throw error; dlg.close(); F.toast("Senha alterada!");
+          if (error) throw error;
+          RL.clear(RLK); recovering = false; F.toast("Senha alterada!"); location.hash = "#/conta";
         }
-      } catch (e) { say(e.mine ? e.message : tr(e)); }
-      finally { if (btn.isConnected) btn.disabled = false; }
+      } catch (e) {
+        if (/rate limit|too many|429/i.test((e && e.message) || "")) RL.hold(RLK, 120);
+        say(e.mine ? e.message : tr(e));
+      } finally { if (btn.isConnected) btn.disabled = false; }
     };
-    if (!dlg.open) dlg.showModal ? dlg.showModal() : dlg.setAttribute("open", "");
-    const first = form.querySelector("input"); if (first) first.focus();
+  }
+  function authShell(mode, inner) {
+    const tabs = mode === "login" || mode === "signup"
+      ? `<nav class="auth-tabs"><a href="#/entrar" class="${mode === "login" ? "on" : ""}">Entrar</a><a href="#/cadastro" class="${mode === "signup" ? "on" : ""}">Criar conta</a></nav>` : "";
+    return `<section class="auth-page"><div class="auth-card">
+      <div class="auth-brand"><img src="img/cards/1.jpg" alt=""><span>FMDrops <b>Yugioh</b></span></div>
+      ${tabs}${inner}
+      <p class="auth-foot">🔒 Conexão segura (HTTPS). A senha vai direto para o servidor de login (Supabase), protegida por criptografia — este site nunca a vê guardada.</p>
+    </div></section>`;
   }
 
   // ---------- RANKING ----------
@@ -182,7 +289,7 @@
     const app = $("#app");
     app.innerHTML = `<section class="hero"><div><h1>Ranking de cartas dropadas</h1>
       <p class="muted">Pontuação = soma do ATK e do DEF de todas as cartas que o jogador marcou como dropadas. Ordem: maior ATK; empate → maior DEF; empate → quem chegou primeiro.</p></div>
-      ${On.enabled ? (On.user ? `<a class="btn primary" href="#/colecao" style="text-decoration:none">Marcar minhas cartas</a>` : `<button class="btn primary" onclick="FMOnline.openAuth('signup')">Criar conta e participar</button>`) : ""}</section>
+      ${On.enabled ? (On.user ? `<a class="btn primary" href="#/colecao" style="text-decoration:none">Marcar minhas cartas</a>` : `<a class="btn primary" href="#/cadastro" style="text-decoration:none">Criar conta e participar</a>`) : ""}</section>
       <div id="rk" class="tbl-wrap"><div class="empty">${On.enabled ? "Carregando ranking…" : "O ranking online ainda não foi ativado neste site."}</div></div>`;
     if (!On.enabled) return;
     const { data, error } = await sb.rpc("leaderboard", { max_rows: 200 });
@@ -207,7 +314,7 @@
 
   // ---------- PERFIL DO JOGADOR (visual de "lista de cartas" do jogo) ----------
   async function viewPlayer(arg) {
-    const name = decodeURIComponent(arg || "");
+    let name = ""; try { name = decodeURIComponent(arg || "").slice(0, 20); } catch { name = ""; }
     const app = $("#app");
     app.innerHTML = `<a class="back" href="#/ranking">← Ranking</a><div id="pl"><div class="empty">Carregando…</div></div>`;
     if (!On.enabled) { $("#pl").innerHTML = `<div class="empty">Ranking online não ativado.</div>`; return; }
@@ -254,16 +361,60 @@
     const app = $("#app");
     if (!On.enabled) { app.innerHTML = `<div class="empty">Contas ainda não ativadas.</div>`; return; }
     if (!On.user) { app.innerHTML = `<section class="hero"><div><h1>Minha conta</h1><p class="muted">Você não está conectado.</p></div>
-      <button class="btn primary" onclick="FMOnline.openAuth('login')">Entrar</button></section>`; return; }
+      <a class="btn primary" href="#/entrar" style="text-decoration:none">Entrar</a></section>`; return; }
     app.innerHTML = `<section class="hero"><div><h1>Minha conta</h1><p class="muted">Apelido: <b>${F.esc(On.username)}</b> · E-mail: ${F.esc(On.user.email || "")} (só você vê)</p></div></section>
       <div class="panel"><div class="row">
         <a class="btn" href="#/jogador/${encodeURIComponent(On.username)}" style="text-decoration:none">Ver meu perfil público</a>
-        <button class="btn" id="chpw">Trocar senha</button>
-        <button class="btn" id="delAcc" style="border-color:var(--bad);color:var(--bad)">Excluir minha conta</button></div>
-        <p class="small muted">Excluir apaga seu login, apelido e cartas marcadas do servidor, para sempre. A coleção continua salva neste navegador.</p></div>`;
-    $("#chpw").onclick = () => openAuth("newpass");
+        <button class="btn" id="chpw" type="button">Trocar senha</button></div></div>
+      <div class="panel"><h2 style="margin-top:0">Corrigir apelido</h2>
+        <form id="unForm" class="authf" novalidate><label>Novo apelido <span class="hint">3 a 20: letras, números, _ . -</span>
+          <input name="user" maxlength="20" autocomplete="nickname" required value="${F.esc(On.username)}"></label>
+          <button class="btn" type="submit">Salvar apelido</button><p class="msg" role="alert" aria-live="assertive"></p></form></div>
+      <div class="panel"><h2 style="margin-top:0">Meus dados (LGPD)</h2>
+        <p class="small muted">Baixe uma cópia de tudo o que o site guarda sobre você: e-mail, apelido, datas, aceite da política e cartas marcadas.</p>
+        <div class="row"><button class="btn" id="expData" type="button">Baixar meus dados</button>
+        <button class="btn" id="delAcc" type="button" style="border-color:var(--bad);color:var(--bad)">Excluir minha conta</button></div>
+        <p class="small muted">Excluir apaga para sempre seu login, e-mail, apelido e cartas marcadas do servidor, e você sai do ranking. A coleção continua salva neste navegador.
+        Veja a <a href="#/privacidade">Política de Privacidade</a>.</p></div>`;
+    $("#chpw").onclick = () => { recovering = false; location.hash = "#/nova-senha"; };
+    const unf = $("#unForm"), unmsg = unf.querySelector(".msg");
+    unf.onsubmit = async ev => {
+      ev.preventDefault();
+      const btn = unf.querySelector("[type=submit]"); if (btn.disabled) return;
+      const u = unf.user.value.trim();
+      const say = (t, ok) => { unmsg.textContent = t; unmsg.className = "msg" + (ok ? " ok" : " err"); };
+      if (u === On.username) return say("Esse já é o seu apelido.");
+      if (!USER_RE.test(u)) return say("Apelido inválido: use 3 a 20 letras, números, _ . ou -");
+      const w = RL.wait("rename"); if (w) return say(`Aguarde ${human(w)} para trocar de novo.`);
+      btn.disabled = true;
+      try {
+        const { error } = await sb.rpc("change_username", { new_name: u });
+        if (error) throw /taken|invalid/i.test(error.message || "") ? mine("Esse apelido já está em uso ou não é permitido. Escolha outro.") : error;
+        RL.hold("rename", 30); On.username = u; drawHeader(); F.toast("Apelido atualizado"); viewAccount();
+      } catch (e) { say(e.mine ? e.message : tr(e)); } finally { if (btn.isConnected) btn.disabled = false; }
+    };
+    $("#expData").onclick = async () => {
+      try {
+        const [{ data: prof, error: e1 }, { data: cards, error: e2 }] = await Promise.all([
+          sb.from("profiles").select("username, created_at").eq("id", On.user.id).maybeSingle(),
+          sb.from("user_cards").select("card_id, created_at").eq("user_id", On.user.id).order("card_id")]);
+        if (e1 || e2) throw e1 || e2;
+        const m = On.user.user_metadata || {};
+        const out = {
+          gerado_em: new Date().toISOString(), site: location.origin + location.pathname,
+          conta: { email: On.user.email, criada_em: On.user.created_at, email_confirmado_em: On.user.email_confirmed_at || null, ultimo_login: On.user.last_sign_in_at || null },
+          perfil_publico: prof, aceite_politica: { versao: m.privacy_version || null, em: m.privacy_accepted_at || null, idade_confirmada: !!m.age_confirmed },
+          cartas_marcadas: (cards || []).map(c => ({ numero: c.card_id, nome: F.CARD[c.card_id] ? F.CARD[c.card_id].n : null, marcada_em: c.created_at })),
+          observacao: "A senha não é incluída: o site não tem acesso a ela (é guardada só como código criptografado).",
+        };
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([JSON.stringify(out, null, 2)], { type: "application/json" }));
+        a.download = "fmdrops-meus-dados.json"; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      } catch (e) { F.toast(tr(e)); }
+    };
     $("#delAcc").onclick = async () => {
-      const t = prompt(`Isto apaga sua conta e sai do ranking para sempre.\nDigite seu apelido (${On.username}) para confirmar:`);
+      const t = prompt(`Isto apaga sua conta e sai do ranking para sempre.
+Digite seu apelido (${On.username}) para confirmar:`);
       if (t !== On.username) return t !== null && F.toast("Apelido não confere; nada foi apagado.");
       const { error } = await sb.rpc("delete_my_account");
       if (error) return F.toast(tr(error));

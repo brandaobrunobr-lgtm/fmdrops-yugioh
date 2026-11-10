@@ -51,6 +51,8 @@ def page(rel_depth, title, desc, canon, og_img, body):
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://itsnqtojjsvktvadeheh.supabase.co wss://itsnqtojjsvktvadeheh.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; worker-src 'none'; manifest-src 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>{e(title)}</title>
 <meta name="description" content="{e(desc)}">
 <link rel="canonical" href="{e(BASE + '/' + canon)}">
@@ -63,16 +65,15 @@ def page(rel_depth, title, desc, canon, og_img, body):
 <meta name="twitter:card" content="summary">
 <meta name="theme-color" content="#14110d">
 <link rel="icon" href="{up}img/cards/1.jpg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=VT323&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{up}assets/fonts/fonts.css">
 <link rel="stylesheet" href="{up}assets/style.css">
-<script>try{{var t=localStorage.getItem("fmd:theme");if(t)document.documentElement.setAttribute("data-theme",JSON.parse(t))}}catch(e){{}}</script>
+<script src="{up}assets/theme-init.js"></script>
 </head>
 <body>
+<a class="skip" href="#conteudo">Pular para o conteúdo</a>
 <header class="top"><div class="top-inner">
   <a class="brand" href="{up}index.html#/cartas"><img src="{up}img/cards/1.jpg" alt=""><span>FMDrops <b>Yugioh</b></span></a>
-  <nav class="nav">
+  <nav class="nav" aria-label="Menu principal">
     <a href="{up}cartas/index.html">Todas as cartas</a>
     <a href="{up}duelistas/index.html">Duelistas</a>
     <a href="{up}index.html#/farm">Farm</a>
@@ -82,12 +83,12 @@ def page(rel_depth, title, desc, canon, og_img, body):
   </nav>
   <div class="top-actions"><a class="btn-donate" href="{up}index.html#/doar" style="text-decoration:none">♥ Apoiar</a></div>
 </div></header>
-<main class="wrap">
+<main class="wrap" id="conteudo" tabindex="-1">
 {body}
 </main>
 <footer class="foot wrap">
   <p>Site de fãs, sem vínculo com a Konami. Yu-Gi-Oh! e Forbidden Memories são marcas da Konami. Dados extraídos do jogo; imagens via Yugipedia.</p>
-  <p><a href="{up}index.html">Abrir o app interativo</a> · <a href="{up}cartas/index.html">Índice de cartas</a> · <a href="{up}duelistas/index.html">Índice de duelistas</a></p>
+  <p><a href="{up}index.html">Abrir o app interativo</a> · <a href="{up}cartas/index.html">Índice de cartas</a> · <a href="{up}duelistas/index.html">Índice de duelistas</a> · <a href="{up}index.html#/privacidade">Privacidade e cookies</a> · <a href="{up}index.html#/sobre">Direitos autorais</a></p>
 </footer>
 </body>
 </html>

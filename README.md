@@ -30,9 +30,11 @@ Teste o QR com o app do seu banco antes de divulgar.
 3. **Authentication → URL Configuration**:
    - *Site URL*: `https://brandaobrunobr-lgtm.github.io/fmdrops-yugioh/`
    - *Redirect URLs*: adicione o mesmo endereço.
-4. **Project Settings → API**: copie a **Project URL** e a chave **anon public** para `assets/config.js` (bloco `supabase`).
+4. **Project Settings → API**: copie a **Project URL** e a chave **publishable** (ou *anon public*) para `assets/config.js` (bloco `supabase`).
    **Nunca** use a chave `service_role` no site.
 5. Publique de novo. O botão **Entrar** e o **Ranking** passam a funcionar.
+6. Segurança: rode `supabase/security_tests.sql` no SQL Editor (todas as linhas devem dar **OK**) e siga
+   as "Configurações no painel" do [SECURITY.md](SECURITY.md) (regras de senha, limites, 2FA).
 
 Observações:
 - O e-mail de confirmação/recuperação do plano grátis tem limite de poucos envios por hora. Para muitos cadastros,

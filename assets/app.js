@@ -24,11 +24,13 @@
     get(k, d) { try { const v = localStorage.getItem("fmd:" + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
     set(k, v) { try { localStorage.setItem("fmd:" + k, JSON.stringify(v)); } catch { /* ignora */ } }
   };
+  // só aceita números de carta válidos (1–722), venham de onde vierem (navegador, arquivo importado)
+  const cardIds = a => Array.isArray(a) ? a.slice(0, 722).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 722) : [];
   const S = {
-    ver: store.get("ver", "mod13"),
-    owned: new Set(store.get("owned", [])),
-    wish: new Set(store.get("wish", [])),
-    filters: store.get("filters", {}),
+    ver: ["mod13", "original"].includes(store.get("ver")) ? store.get("ver") : "mod13",
+    owned: new Set(cardIds(store.get("owned", []))),
+    wish: new Set(cardIds(store.get("wish", []))),
+    filters: (f => f && typeof f === "object" && !Array.isArray(f) ? f : {})(store.get("filters", {})),
   };
   const saveSets = () => { store.set("owned", [...S.owned]); store.set("wish", [...S.wish]); };
 
@@ -118,11 +120,15 @@
     if (r.name === "doar") { history.replaceState(null, "", "#/cartas"); viewCards(); openDonate(); return; }
     document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.dataset.r === r.name ||
       (r.name === "carta" && a.dataset.r === "cartas") || (r.name === "duelista" && a.dataset.r === "duelistas") || (r.name === "jogador" && a.dataset.r === "ranking")));
+    document.querySelectorAll("#nav a").forEach(a => a.classList.contains("on") ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
     const v = { cartas: viewCards, carta: viewCard, duelistas: viewDuelists, duelista: viewDuelist, farm: viewFarm,
-      colecao: viewCollection, mudancas: viewChanges, sobre: viewAbout, ...EXTRA_VIEWS }[r.name] || viewCards;
+      colecao: viewCollection, mudancas: viewChanges, sobre: viewAbout, privacidade: viewPrivacy, ...EXTRA_VIEWS }[r.name] || viewCards;
     v(r.arg);
   }
-  window.addEventListener("hashchange", () => { render(); if (!["cartas"].includes(route().name)) window.scrollTo(0, 0); });
+  window.addEventListener("hashchange", () => {
+    render(); if (!["cartas"].includes(route().name)) window.scrollTo(0, 0);
+    const h = $("#app h1"); if (h) { h.tabIndex = -1; h.focus({ preventScroll: true }); }   // leitor de tela anuncia a nova página
+  });
 
   // ---------- CARTAS ----------
   let shown = 0, lastList = [];
@@ -221,9 +227,9 @@
     if (c.pw) stats.push(["Senha", c.pw]);
     if (c.sc) stats.push(["Star Chips", c.sc.toLocaleString("pt-BR")]);
     $("#app").innerHTML = `
-      <a class="back" href="javascript:history.back()">← Voltar</a>
+      <a class="back" href="#/cartas" data-act="back">← Voltar</a>
       <div class="detail">
-        <div><img class="big" src="img/full/${c.id}.jpg" alt="${esc(c.n)}" onerror="this.src='${img(c.id)}'">
+        <div><img class="big" src="img/full/${c.id}.jpg" alt="${esc(c.n)}" data-fallback="${img(c.id)}">
           <div class="row" style="margin-top:10px">
             <button class="btn${S.wish.has(c.id) ? " primary" : ""}" data-wish="${c.id}">★ Desejo</button>
             <button class="btn${S.owned.has(c.id) ? " primary" : ""}" data-own="${c.id}">✓ Tenho</button>
@@ -244,7 +250,7 @@
             </tbody></table></div>` : `<div class="note">Esta carta não dropa de nenhum duelista nesta versão.${rit ? " Farme o card de ritual acima." : ""}</div>`}
           ${lost.length ? `<p class="small muted">Dropava no ${otherLabel} e não dropa aqui: ${lost.map(d => esc(DUEL[d].n)).join(", ")}.</p>` : ""}
           <p class="small muted">A chance vale por duelo vencido com o rank indicado. "1 em N" = média de duelos para conseguir a carta.</p>
-          ${dk.length ? `<h3>Duelistas que usam no deck</h3><div class="row">${dk.slice(0, 20).map(x => `<span class="chip" onclick="location.hash='#/duelista/${x.d}'">${esc(DUEL[x.d].n)} · ${pct(x.p)}</span>`).join("")}</div>` : ""}
+          ${dk.length ? `<h3>Duelistas que usam no deck</h3><div class="row">${dk.slice(0, 20).map(x => `<span class="chip" data-go="#/duelista/${x.d}">${esc(DUEL[x.d].n)} · ${pct(x.p)}</span>`).join("")}</div>` : ""}
         </div></div>`;
     $("#shareBtn").addEventListener("click", () => copy(new URL(`cartas/${c.id}-${slug(c.n)}.html`, location.href).href, "Link copiado"));
   }
@@ -343,7 +349,7 @@
     $("#app").innerHTML = `
       <section class="hero"><div><h1>Minha coleção</h1><p class="muted">${me
         ? `Sincronizada com a sua conta <b>${esc(on.username || "")}</b> — vale em qualquer aparelho. <a href="#/jogador/${encodeURIComponent(on.username || "")}">Ver meu perfil público</a>`
-        : `Salva só neste navegador. ${on && on.enabled ? `<button class="linklike" onclick="FMOnline.openAuth('login')">Entre ou crie uma conta</button> para salvar online e entrar no <a href="#/ranking">ranking</a>.` : "Exporte para não perder ou levar para outro aparelho."}`}</p>
+        : `Salva só neste navegador. ${on && on.enabled ? `<a href="#/entrar">Entre ou crie uma conta</a> para salvar online e entrar no <a href="#/ranking">ranking</a>.` : "Exporte para não perder ou levar para outro aparelho."}`}</p>
         <div class="kpis" style="margin-top:10px"><div class="kpi"><b>ATK ${atk.toLocaleString("pt-BR")}</b><span>soma do ATK das cartas marcadas</span></div>
         <div class="kpi"><b>DEF ${def.toLocaleString("pt-BR")}</b><span>soma do DEF</span></div></div></div>
         <div class="row"><button class="btn" id="exp">Exportar</button><label class="btn">Importar<input type="file" id="imp" accept="application/json" hidden></label><button class="btn" id="rst">Zerar</button></div></section>
@@ -360,9 +366,12 @@
     });
     $("#imp").addEventListener("change", async e => {
       try {
-        const j = JSON.parse(await e.target.files[0].text());
-        const owned = new Set((j.owned || []).map(Number).filter(id => CARD[id]));
-        S.wish = new Set((j.wish || []).map(Number).filter(id => CARD[id]));
+        const f = e.target.files[0];
+        if (!f || f.size > 50000) throw new Error("tamanho");   // um backup real tem poucos KB
+        const j = JSON.parse(await f.text());
+        if (!j || typeof j !== "object" || Array.isArray(j)) throw new Error("formato");
+        const owned = new Set(cardIds(j.owned));
+        S.wish = new Set(cardIds(j.wish));
         if (me) await on.replaceOwned(owned); else S.owned = owned;
         saveSets(); toast("Coleção importada"); viewCollection();
       } catch { toast("Arquivo inválido"); }
@@ -414,17 +423,138 @@
         <h3>Como funciona o drop</h3>
         <p>Ao vencer, o jogo sorteia <b>1 carta</b> do pool do duelista correspondente ao seu rank: S/A-POW (vitória por força), S/A-TEC (vitória técnica) ou B/C/D (ranks baixos). A chance é <i>N</i>/2048 por duelo.</p>
         <h3 id="privacidade">Contas, ranking e privacidade</h3>
-        <p>A conta é opcional: sem ela, a coleção fica só no seu navegador. Com conta, guardamos apenas o <b>e-mail</b> (para entrar e recuperar a senha — nunca é exibido),
-        o <b>apelido</b> e as <b>cartas que você marcou</b>. O apelido, as cartas marcadas e a pontuação (ATK/DEF) são <b>públicos</b> no ranking.
-        As senhas são guardadas pelo Supabase (serviço de login) de forma criptografada; ninguém do site tem acesso a elas.
-        Você pode excluir sua conta e todos os dados a qualquer momento em <a href="#/conta">Minha conta</a>.</p>
+        <p>A conta é opcional. Com ela, guardamos só o e-mail (nunca exibido), o apelido e as cartas marcadas; o apelido, as cartas e a pontuação aparecem no ranking.
+        Sem cookies e sem rastreamento. Leia a <a href="#/privacidade">Política de Privacidade e Cookies</a>.</p>
         <p class="small muted">O ranking é feito com o que cada jogador marca, sem verificação no jogo: vale a honestidade de cada um.</p>
-        <h3>Imagens e marcas</h3>
-        <p class="small muted">Imagens de cartas e personagens obtidas via Yugipedia. Yu-Gi-Oh! e Forbidden Memories são marcas e propriedade da Konami. Este é um projeto de fãs, sem fins comerciais e sem vínculo com a Konami.</p>
+        <h3 id="direitos">Direitos autorais e marcas</h3>
+        <p class="small muted">Yu-Gi-Oh!, Yu-Gi-Oh! Forbidden Memories, as artes das cartas e os retratos dos personagens são © Kazuki Takahashi / Konami Digital Entertainment.
+        As imagens foram obtidas via <a href="https://yugipedia.com" target="_blank" rel="noopener">Yugipedia</a> e são usadas em tamanho reduzido, só para identificar as cartas, num projeto de fãs sem fins lucrativos e sem vínculo com a Konami.
+        As doações ajudam a manter o projeto; não vendemos imagens nem conteúdo. As tabelas de drop são dados extraídos do jogo para fins informativos.
+        Fontes Cinzel, VT323 e Inter: SIL Open Font License 1.1. Bibliotecas supabase-js e qrcode-generator: licença MIT.</p>
+        <p class="small muted">É titular de algum direito e quer a remoção de um conteúdo? Fale com o responsável ${contactHtml()} e o conteúdo será retirado.</p>
         ${CFG.repoUrl ? `<p><a href="${esc(CFG.repoUrl)}" target="_blank" rel="noopener">Código no GitHub</a></p>` : ""}
-        <p><button class="btn-donate" onclick="document.getElementById('donateBtn').click()">♥ Apoiar o projeto</button></p>
+        <p><button class="btn-donate" data-act="donate">♥ Apoiar o projeto</button></p>
       </div>`;
   }
+
+  // ---------- POLÍTICA DE PRIVACIDADE (LGPD — Lei 13.709/2018) ----------
+  const POLICY_VERSION = "2026-11-09";
+  function contactHtml() {
+    const c = String(CFG.privacyContact || "").trim();
+    if (/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(c)) return `pelo e-mail <a href="mailto:${esc(c)}">${esc(c)}</a>`;
+    return CFG.repoUrl ? `abrindo uma <i>issue</i> em <a href="${esc(CFG.repoUrl)}/issues" target="_blank" rel="noopener">${esc(CFG.repoUrl.replace(/^https:\/\//, ""))}/issues</a> (não coloque dados pessoais no texto público; peça um canal privado)` : "pelo repositório do projeto";
+  }
+  function viewPrivacy() {
+    const d = POLICY_VERSION.split("-").reverse().join("/");
+    $("#app").innerHTML = `
+      <section class="hero"><div><h1>Política de Privacidade e Cookies</h1>
+        <p class="muted">Versão de ${d}. Escrita em linguagem simples, conforme a Lei Geral de Proteção de Dados (LGPD — Lei nº 13.709/2018).</p></div></section>
+      <article class="panel legal">
+        <h2>Resumo</h2>
+        <ul>
+          <li>Você pode usar todo o site <b>sem conta</b>, e aí nada seu vai para nenhum servidor nosso.</li>
+          <li>Com conta, guardamos só o <b>e-mail</b>, o <b>apelido</b> e as <b>cartas que você marcar</b>. O apelido, as cartas e a pontuação aparecem no ranking público. O e-mail <b>nunca</b> aparece.</li>
+          <li><b>Não usamos cookies</b>, nem anúncios, nem rastreamento, nem ferramentas de estatística.</li>
+          <li>Você pode <b>baixar</b>, <b>corrigir</b> e <b>apagar</b> seus dados quando quiser, em <a href="#/conta">Minha conta</a>.</li>
+        </ul>
+
+        <h2>1. Quem é o responsável (controlador)</h2>
+        <p>O FMDrops Yugioh é um projeto de fã, gratuito, mantido por uma pessoa física. Contato do responsável pelos dados (encarregado) ${contactHtml()}.</p>
+
+        <h2>2. Quais dados tratamos</h2>
+        <div class="tbl-wrap"><table class="tbl">
+          <thead><tr><th>Situação</th><th>Dados</th><th>Onde ficam</th></tr></thead>
+          <tbody>
+            <tr><td>Qualquer visitante</td><td>Preferências (tema, versão do jogo, filtros), coleção e lista de desejos sem conta, aviso de privacidade já visto e contadores de tentativas de login</td><td>Só no <b>seu navegador</b> (armazenamento local). Não recebemos nada disso.</td></tr>
+            <tr><td>Quem cria conta</td><td>E-mail, senha (guardada só como código criptografado irreversível), apelido, data de cadastro, cartas marcadas com a data de cada marcação, versão e data do aceite desta política</td><td>Supabase (serviço de login e banco de dados)</td></tr>
+            <tr><td>Registros técnicos de segurança</td><td>Endereço IP, navegador e horário de acessos e logins</td><td>Registrados automaticamente pelo GitHub (hospedagem do site) e pelo Supabase (login), para proteger contra abusos. Não temos ferramenta de estatística.</td></tr>
+            <tr><td>Doações</td><td>Nenhum dado de pagamento passa pelo site. O Pix é feito no app do seu banco; quem recebe vê apenas o que o próprio Pix mostra (como o nome do pagador).</td><td>Seu banco ou plataforma escolhida</td></tr>
+          </tbody></table></div>
+        <p>Coletamos <b>só o necessário</b>: não pedimos nome real, CPF, telefone, endereço, data de nascimento nem localização.</p>
+
+        <h2>3. Para que usamos e com qual base legal</h2>
+        <ul>
+          <li><b>Criar e manter sua conta, salvar suas cartas e calcular sua pontuação:</b> execução do serviço que você pediu (LGPD art. 7º, V).</li>
+          <li><b>Mostrar seu apelido, suas cartas e sua pontuação no ranking público:</b> seu consentimento, dado ao criar a conta (art. 7º, I). Você pode revogá-lo apagando a conta.</li>
+          <li><b>Enviar e-mails de confirmação de cadastro e de recuperação de senha:</b> execução do serviço (art. 7º, V). Não enviamos propaganda.</li>
+          <li><b>Registros de segurança e limite de tentativas de login:</b> legítimo interesse em proteger as contas (art. 7º, IX).</li>
+        </ul>
+
+        <h2>4. O que fica público</h2>
+        <p>Apenas o <b>apelido</b>, a <b>lista de números das cartas marcadas</b> e a <b>pontuação</b> (soma de ATK e de DEF), e só para quem tem pelo menos uma carta marcada. Escolha um apelido que não identifique você, se preferir.</p>
+
+        <h2>5. Com quem compartilhamos</h2>
+        <p>Não vendemos, não alugamos e não compartilhamos dados para publicidade. Usamos dois fornecedores (operadores), apenas para o site funcionar:</p>
+        <ul>
+          <li><b>Supabase Inc.:</b> login e banco de dados.</li>
+          <li><b>GitHub Inc.:</b> hospedagem das páginas.</li>
+        </ul>
+        <p>Esses serviços podem guardar dados em servidores fora do Brasil (por exemplo, nos EUA). Essa transferência internacional se baseia nas garantias contratuais de proteção de dados desses fornecedores (LGPD art. 33).</p>
+
+        <h2 id="cookies">6. Cookies e armazenamento no navegador</h2>
+        <p>Este site <b>não usa cookies</b>, nem de anúncios, nem de estatística, nem de terceiros. Também <b>não usa</b> Google Analytics, pixels de redes sociais ou qualquer ferramenta de rastreamento.</p>
+        <p>As fontes e as bibliotecas são servidas pelo próprio site, então abrir uma página não envia seu IP ao Google nem a outros serviços.</p>
+        <p>Usamos apenas o <b>armazenamento local do navegador</b> (<i>localStorage</i>), que é essencial para:</p>
+        <ul>
+          <li>lembrar suas preferências e sua coleção;</li>
+          <li>manter você conectado, se tiver conta (é a sessão de login do Supabase).</li>
+        </ul>
+        <p>Esses dados ficam no seu aparelho e você pode apagá-los quando quiser nas configurações do navegador. Se apagar, a coleção sem conta é perdida, então exporte antes.</p>
+
+        <h2>7. Por quanto tempo guardamos</h2>
+        <p>Enquanto sua conta existir. Ao <b>excluir a conta</b>, apagamos na hora o login, o e-mail, o apelido e as cartas. Cópias de segurança automáticas do provedor, se existirem, expiram sozinhas. Os registros técnicos são mantidos pelos fornecedores pelos prazos de segurança deles.</p>
+
+        <h2>8. Seus direitos (LGPD art. 18) e como exercê-los</h2>
+        <ul>
+          <li><b>Confirmar e acessar os seus dados; portabilidade:</b> em <a href="#/conta">Minha conta → Baixar meus dados</a>, você recebe um arquivo com tudo o que guardamos sobre você.</li>
+          <li><b>Corrigir:</b> troque o apelido em <a href="#/conta">Minha conta</a>, e as cartas na <a href="#/colecao">Coleção</a>.</li>
+          <li><b>Eliminar e revogar o consentimento:</b> em <a href="#/conta">Minha conta → Excluir minha conta</a>.</li>
+          <li><b>Informação sobre compartilhamento e outras solicitações:</b> fale com o responsável ${contactHtml()}. Respondemos em até 15 dias.</li>
+          <li>Você também pode reclamar à <a href="https://www.gov.br/anpd" target="_blank" rel="noopener">Autoridade Nacional de Proteção de Dados (ANPD)</a>.</li>
+        </ul>
+
+        <h2>9. Segurança</h2>
+        <p>Usamos conexão criptografada (HTTPS) e senhas guardadas só como código irreversível. O banco é configurado para que cada pessoa acesse apenas os próprios dados, e há limite de tentativas de login e política de segurança de conteúdo no site. Detalhes técnicos estão no arquivo <a href="${esc((CFG.repoUrl || "") + "/blob/main/SECURITY.md")}" target="_blank" rel="noopener">SECURITY.md</a>. Se suspeitar de algum problema, avise o responsável.</p>
+
+        <h2>10. Crianças e adolescentes</h2>
+        <p>O site pode ser visitado por qualquer pessoa. Para <b>criar conta</b>, é preciso ter 18 anos ou mais ou ter autorização de mãe, pai ou responsável. Isso é confirmado no cadastro (LGPD art. 14). Se um responsável quiser apagar a conta de um menor, basta entrar em contato.</p>
+
+        <h2>11. Mudanças nesta política</h2>
+        <p>Se esta política mudar de forma importante, a data acima será atualizada e o aviso aparecerá de novo no site.</p>
+      </article>`;
+  }
+
+  // aviso de privacidade/cookies (informativo: o site só usa armazenamento essencial, sem cookies)
+  function privacyNotice() {
+    if (store.get("notice") === POLICY_VERSION || $("#pnotice")) return;
+    const n = document.createElement("div");
+    n.id = "pnotice"; n.className = "pnotice"; n.setAttribute("role", "region"); n.setAttribute("aria-label", "Aviso de privacidade");
+    n.innerHTML = `<p><b>Sem cookies e sem rastreamento.</b> Guardamos só suas preferências e sua coleção no seu navegador e, se você criar conta, a sessão de login.
+      <a href="#/privacidade">Política de privacidade</a></p><button class="btn primary sm" type="button">Entendi</button>`;
+    n.querySelector("button").onclick = () => { store.set("notice", POLICY_VERSION); n.remove(); };
+    document.body.appendChild(n);
+  }
+
+  // ---------- ACESSIBILIDADE: elementos clicáveis que não são botão/link ganham foco e teclado ----------
+  const A11Y_SEL = ".chip[data-v],.chip[data-amt],[data-go],[data-card]:not(button):not(a),[data-player]";
+  function a11y(root) {
+    root.querySelectorAll(A11Y_SEL).forEach(el => {
+      if (el.hasAttribute("tabindex")) { if (el.classList.contains("chip")) el.setAttribute("aria-pressed", el.classList.contains("on")); return; }
+      el.tabIndex = 0;
+      if (el.classList.contains("chip")) { el.setAttribute("role", "button"); el.setAttribute("aria-pressed", el.classList.contains("on")); }
+      else {
+        el.setAttribute("role", "link");
+        if (!el.hasAttribute("aria-label")) {
+          const t = el.dataset.player ? `Ver cartas de ${el.dataset.player}` : el.dataset.card && CARD[el.dataset.card] ? `Abrir carta ${CARD[el.dataset.card].n}` : "";
+          if (t) el.setAttribute("aria-label", t);
+        }
+      }
+    });
+  }
+  document.addEventListener("keydown", e => {
+    if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(A11Y_SEL)) { e.preventDefault(); e.target.click(); }
+  });
+  new MutationObserver(() => a11y(document.body)).observe(document.body, { childList: true, subtree: true });
 
   // ---------- DOAÇÃO (Pix BR Code + links) ----------
   const tlv = (id, v) => id + String(v.length).padStart(2, "0") + v;
@@ -501,6 +631,20 @@
     S.ver = b.dataset.v; store.set("ver", S.ver); drawVer(); render(); toast(S.ver === "mod13" ? "Mostrando Mod 13" : "Mostrando jogo original");
   });
 
+  // ---------- ações sem JavaScript inline (exigência da política de segurança CSP) ----------
+  document.addEventListener("click", e => {
+    const g = e.target.closest("[data-go]"); if (g) { location.hash = g.dataset.go; return; }
+    const a = e.target.closest("[data-act]"); if (!a) return;
+    if (a.dataset.act === "back" && history.length > 1) { e.preventDefault(); history.back(); }
+    if (a.dataset.act === "donate") { e.preventDefault(); $("#donateBtn").click(); }
+    if (a.dataset.act === "skip") { e.preventDefault(); const m = $("#app"); m.focus(); m.scrollIntoView(); }
+  });
+  document.addEventListener("error", e => {
+    const i = e.target; if (i.tagName === "IMG" && i.dataset.fallback && i.src.indexOf(i.dataset.fallback) < 0) i.src = i.dataset.fallback;
+  }, true);
+  // anti-clickjacking: o site não funciona dentro de iframe de terceiros
+  if (window.top !== window.self) { document.documentElement.innerHTML = ""; try { window.top.location.href = location.href; } catch { /* */ } return; }
+
   // ---------- boot ----------
   fetch("data/fm-data.json").then(r => r.json()).then(j => {
     D = j;
@@ -510,6 +654,6 @@
     if (!D.pools[S.ver]) S.ver = "mod13";
     window.FMD = { S, D, CARD, DUEL, render, route, toast, saveSets, esc, pad, img, EXTRA_VIEWS, STAR_PT, TYPE_PT, CAT_PT };
     if (window.FMOnline) window.FMOnline.init();
-    drawVer(); render();
+    drawVer(); render(); privacyNotice();
   }).catch(() => { $("#app").innerHTML = `<div class="empty">Não foi possível carregar os dados. Se abriu o arquivo direto do disco, use um servidor local ou o GitHub Pages.</div>`; });
 })();

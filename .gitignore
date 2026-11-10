@@ -5,3 +5,16 @@ Thumbs.db
 desktop.ini
 
 dev-mock.html
+
+# segredos nunca vão para o git
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+secrets*
+*service_role*
+supabase/.temp/
+# simulador local de testes (tem senhas falsas de teste)
+tools/mock-supabase.js

@@ -14,10 +14,13 @@ window.SITE_CONFIG = {
      (Supabase > Project Settings > API). A chave anon é pública por natureza; a segurança
      vem das regras do banco (supabase/schema.sql). NUNCA coloque aqui a chave "service_role". */
   supabase: {
-    url: "",
-    anonKey: ""
+    url: "https://itsnqtojjsvktvadeheh.supabase.co",
+    anonKey: "sb_publishable_Ellq-y_8-ajhlCc9jUzs6Q_Kuh_dWr2"
   },
   siteName: "FMDrops Yugioh",
+  /* LGPD: canal de contato do responsável pelos dados (aparece na Política de Privacidade).
+     Recomendado: um e-mail só para o projeto. Se ficar vazio, o contato é pelas issues do GitHub. */
+  privacyContact: "",
   repoUrl: "https://github.com/brandaobrunobr-lgtm/fmdrops-yugioh",
   pix: {
     key: "",              // sua chave Pix

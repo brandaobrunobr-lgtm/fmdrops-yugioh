@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self' https://itsnqtojjsvktvadeheh.supabase.co wss://itsnqtojjsvktvadeheh.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'; frame-src 'none'; worker-src 'none'; manifest-src 'self'">
+<meta name="referrer" content="strict-origin-when-cross-origin">
 <title>FMDrops Yugioh — Forbidden Memories Mod 13</title>
 <meta name="description" content="Tabela interativa de drops do Yu-Gi-Oh! Forbidden Memories (Mod 13 e original): 722 cartas, 39 duelistas, planejador de farm e coleção.">
 <meta name="theme-color" content="#14110d">
 <link rel="icon" href="img/cards/1.jpg">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=VT323&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/fonts/fonts.css">
 <link rel="stylesheet" href="assets/style.css">
 <!--SEO-->
 <link rel="canonical" href="https://brandaobrunobr-lgtm.github.io/fmdrops-yugioh/">
@@ -23,10 +23,11 @@
 <!--/SEO-->
 </head>
 <body>
+<a class="skip" href="#app" data-act="skip">Pular para o conteúdo</a>
 <header class="top">
   <div class="top-inner">
     <a class="brand" href="#/cartas"><img src="img/cards/1.jpg" alt=""><span>FMDrops <b>Yugioh</b></span></a>
-    <nav class="nav" id="nav">
+    <nav class="nav" id="nav" aria-label="Menu principal">
       <a href="#/cartas" data-r="cartas">Cartas</a>
       <a href="#/duelistas" data-r="duelistas">Duelistas</a>
       <a href="#/farm" data-r="farm">Farm</a>
@@ -45,13 +46,13 @@
   </div>
 </header>
 
-<main id="app" class="wrap"><p class="loading">Carregando dados…</p>
+<main id="app" class="wrap" tabindex="-1"><p class="loading">Carregando dados…</p>
   <noscript><p>Este app precisa de JavaScript. Veja a versão estática: <a href="cartas/index.html">todas as cartas</a> · <a href="duelistas/index.html">duelistas</a>.</p></noscript>
 </main>
 
 <footer class="foot wrap">
   <p>Site de fãs, sem vínculo com a Konami. Yu-Gi-Oh! e Forbidden Memories são marcas da Konami. Dados extraídos do jogo; imagens via Yugipedia.</p>
-  <p><a href="cartas/index.html">Índice de cartas</a> · <a href="duelistas/index.html">Índice de duelistas</a></p>
+  <p><a href="cartas/index.html">Índice de cartas</a> · <a href="duelistas/index.html">Índice de duelistas</a> · <a href="#/privacidade">Privacidade e cookies</a> · <a href="#/sobre">Direitos autorais</a></p>
   <p><button class="linklike" id="donateBtn2">♥ Gostou? Apoie o projeto com qualquer valor</button></p>
 </footer>
 
@@ -60,9 +61,9 @@
 </dialog>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="assets/vendor/qrcode.min.js"></script>
 <script src="assets/config.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.46.1/dist/umd/supabase.js"></script>
+<script src="assets/vendor/supabase.js"></script>
 <script src="assets/app.js"></script>
 <script src="assets/online.js"></script>
 </body>
