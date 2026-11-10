@@ -20,11 +20,11 @@ window.SITE_CONFIG = {
   siteName: "FMDrops Yugioh",
   /* LGPD: canal de contato do responsável pelos dados (aparece na Política de Privacidade).
      Recomendado: um e-mail só para o projeto. Se ficar vazio, o contato é pelas issues do GitHub. */
-  privacyContact: "",
+  privacyContact: "brandaobrunobr@gmail.com",
   repoUrl: "https://github.com/brandaobrunobr-lgtm/fmdrops-yugioh",
   pix: {
-    key: "",              // sua chave Pix
-    name: "",             // nome do recebedor (sem acento)
+    key: "db34d3a3-6777-4881-85b7-c46287117630", // chave Pix aleatória
+    name: "FMDrops Yugioh", // nome exibido no QR (o banco mostra o titular real)
     city: "",             // cidade (sem acento)
     message: "Apoio FMDrops Yugioh"
   },
