@@ -352,7 +352,7 @@
         : `Salva só neste navegador. ${on && on.enabled ? `<a href="#/entrar">Entre ou crie uma conta</a> para salvar online e entrar no <a href="#/ranking">ranking</a>.` : "Exporte para não perder ou levar para outro aparelho."}`}</p>
         <div class="kpis" style="margin-top:10px"><div class="kpi"><b>ATK ${atk.toLocaleString("pt-BR")}</b><span>soma do ATK das cartas marcadas</span></div>
         <div class="kpi"><b>DEF ${def.toLocaleString("pt-BR")}</b><span>soma do DEF</span></div></div></div>
-        <div class="row"><button class="btn" id="exp">Exportar</button><label class="btn">Importar<input type="file" id="imp" accept="application/json" hidden></label><button class="btn" id="rst">Zerar</button></div></section>
+        <div class="row"><button class="btn" id="exp">Exportar</button><label class="btn">Importar<input type="file" id="imp" accept="application/json" hidden></label><button class="btn" id="rst">Zerar</button><a class="btn" href="live.html">📺 Painel para live</a></div></section>
       <div class="panel"><div class="row" style="justify-content:space-between"><b>${o} / 722 cartas</b><span class="muted">${(o / 722 * 100).toFixed(1).replace(".", ",")}%</span></div>
         <div class="prog" style="margin:8px 0 14px"><i style="width:${o / 722 * 100}%"></i></div>
         <div class="cols3">${cats.map(([k, a, t]) => `<div><div class="row" style="justify-content:space-between"><span>${CAT_PT[k]}</span><span class="small muted">${a}/${t}</span></div><div class="prog"><i style="width:${t ? a / t * 100 : 0}%"></i></div></div>`).join("")}</div></div>
