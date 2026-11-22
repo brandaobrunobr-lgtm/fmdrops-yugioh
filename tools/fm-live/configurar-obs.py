@@ -88,13 +88,17 @@ def main():
                                              "cursor": False, "priority": 2})
     som = fonte("wasapi_process_output_capture", "Som do jogo", {"window": JANELA, "priority": 2})
     css = "body{background-color:rgba(0,0,0,0);margin:0;overflow:hidden}"
+    # páginas do painel a 15 fps (mudam pouco) e o fundo como imagem fixa: as páginas do OBS
+    # (Chromium) acumulam memória em sessões longas, e o fundo animado em 1920x1080 era o mais pesado.
+    # A imagem vem de live.html?v=fundo (img/fundo-live.jpg); refaça-a se mudar o fundo.
     painel = fonte("browser_source", "Painel de cartas", {"url": BASE + "&bg=transp", "width": 1080,
-                                                          "height": 700, "fps": 30, "css": css,
+                                                          "height": 700, "fps": 15, "css": css,
                                                           "restart_when_active": False, "shutdown": False})
     drop = fonte("browser_source", "Último drop", {"url": BASE + "&v=drop&bg=transp", "width": 640,
-                                                    "height": 360, "fps": 30, "css": css})
-    fundo = fonte("browser_source", "Plano de fundo", {"url": "http://127.0.0.1:8765/live.html?v=fundo",
-                                                         "width": 1920, "height": 1080, "fps": 30, "css": css})
+                                                    "height": 360, "fps": 15, "css": css})
+    repo = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+    fundo = fonte("image_source", "Plano de fundo", {"file": os.path.join(repo, "img", "fundo-live.jpg").replace("\\", "/"),
+                                                       "unload": False})
     avatar = fonte("browser_source", "Avatar", {"url": BASE + "&v=avatar", "width": 480, "height": 340,
                                                 "fps": 30, "css": css})
     gw = 1920 - 480                                 # largura do jogo na tela (4:3 em 1080 de altura)
