@@ -274,3 +274,29 @@ main:focus,h1:focus{outline:none}
 .legal h2:first-child{margin-top:0}
 .legal p,.legal li{line-height:1.6}
 .legal .tbl td{vertical-align:top}
+
+/* fusões */
+a.tile{display:block;color:inherit;text-decoration:none}
+.fus-tile .fus-can,.fus-tile .fus-one{position:absolute;top:6px;right:6px;border-radius:6px;padding:1px 7px;font-size:11.5px;font-weight:700}
+.fus-tile .fus-can{background:var(--good);color:#10200f}
+.fus-tile .fus-one{background:rgba(0,0,0,.72);color:#f0d48a}
+.fus-head{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap;margin-top:6px}
+.fus-head .fus-big{width:180px;max-width:40vw;height:auto;border-radius:10px;border:1px solid var(--line)}
+.fus-head > div{flex:1 1 280px}
+.fus-head .num{font-size:13px;color:var(--gold);font-weight:700}
+.fus-groups{display:flex;flex-direction:column;gap:8px;margin:8px 0}
+.fus-row{display:flex;gap:8px;align-items:flex-start;padding:8px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+.fus-row > .fus-mat{flex:0 0 auto;width:170px}
+.fus-plus{font-size:22px;font-weight:700;color:var(--gold);line-height:34px}
+.fus-partners{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
+.fus-mat{display:inline-flex;align-items:center;gap:6px;padding:2px 8px 2px 2px;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--txt);text-decoration:none;font-size:13px;max-width:100%}
+.fus-mat img{width:30px;height:30px;border-radius:5px;object-fit:cover;flex:0 0 auto}
+.fus-mat span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fus-mat:hover{border-color:var(--gold)}
+.fus-mat.own{border-color:var(--good);box-shadow:inset 0 0 0 1px var(--good)}
+@media (max-width:600px){.fus-row{flex-direction:column}.fus-row > .fus-mat{width:auto}.fus-plus{line-height:1}}
+.fus-tile .fus-new{position:absolute;left:6px;top:32px;background:#7a3fb8;color:#fff;border-radius:6px;padding:1px 7px;font-size:11px;font-weight:700}
+.fus-tag{font-style:normal;font-size:10.5px;font-weight:700;color:#fff;background:#7a3fb8;border-radius:5px;padding:0 5px;margin-left:2px;white-space:nowrap}
+.fus-mat.tagged{border-color:#7a3fb8}
+.fus-pair{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fus-pair .fus-plus{line-height:1}

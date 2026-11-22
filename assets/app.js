@@ -102,7 +102,7 @@
       toggle(w ? S.wish : S.owned, id, w ? "Lista de desejos" : "Coleção");
       if (w) w.classList.toggle("on", S.wish.has(id));
       if (o) { o.classList.toggle("on", S.owned.has(id)); const t = o.closest(".tile"); if (t) t.classList.toggle("owned", S.owned.has(id)); }
-      if (route().name === "farm" || route().name === "colecao") render();
+      if (["farm", "colecao", "fusoes", "fusao"].includes(route().name)) render();
       return;
     }
     const t = e.target.closest("[data-card]");
@@ -119,7 +119,7 @@
     const r = route();
     if (r.name === "doar") { history.replaceState(null, "", "#/cartas"); viewCards(); openDonate(); return; }
     document.querySelectorAll("#nav a").forEach(a => a.classList.toggle("on", a.dataset.r === r.name ||
-      (r.name === "carta" && a.dataset.r === "cartas") || (r.name === "duelista" && a.dataset.r === "duelistas") || (r.name === "jogador" && a.dataset.r === "ranking")));
+      (r.name === "carta" && a.dataset.r === "cartas") || (r.name === "duelista" && a.dataset.r === "duelistas") || (r.name === "fusao" && a.dataset.r === "fusoes") || (r.name === "jogador" && a.dataset.r === "ranking")));
     document.querySelectorAll("#nav a").forEach(a => a.classList.contains("on") ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
     const v = { cartas: viewCards, carta: viewCard, duelistas: viewDuelists, duelista: viewDuelist, farm: viewFarm,
       colecao: viewCollection, mudancas: viewChanges, sobre: viewAbout, privacidade: viewPrivacy, ...EXTRA_VIEWS }[r.name] || viewCards;
@@ -407,8 +407,10 @@
       ${cards.map(c => `<tr data-card="${c}" style="cursor:pointer"><td><img class="thumb" src="${img(c)}" alt="" loading="lazy"></td>
         <td><div class="small muted">#${pad(c)}</div><b>${esc(CARD[c].n)}</b>${CARD[c].a != null ? `<div class="small muted">ATK ${CARD[c].a}</div>` : ""}</td>
         <td class="small">${map[c].sort((x, y) => y.b - x.b).map(x => `${esc(DUEL[x.d].n)} · ${RANKS[x.p][0]} · ${x.a ? pct(x.a) : "—"} → <b class="${x.b > x.a ? "diff-up" : "diff-down"}">${x.b ? pct(x.b) : "removido"}</b>`).join("<br>")}</td></tr>`).join("")}
-      </tbody></table></div>`;
+      </tbody></table></div>
+      <div id="fusChanges"></div>`;
     $("#chm").addEventListener("click", e => { const c = e.target.closest(".chip"); if (c) { store.set("chmode", c.dataset.v); viewChanges(); } });
+    if (window.FMFusions) window.FMFusions.changesSection($("#fusChanges"));
   }
 
   // ---------- SOBRE ----------
@@ -419,7 +421,8 @@
         <h3>De onde vêm os dados</h3>
         <p>As tabelas do <b>Mod 13</b> foram lidas diretamente do arquivo <code>WA_MRG.MRG</code> da ISO (versão PT-BR): 39 duelistas × 4 pools (Deck, S/A-POW, S/A-TEC, B/C/D), cada um somando exatamente 2048.
         A leitura foi validada contra o banco de dados do jogo original publicado em <a href="https://github.com/sg4e/YGOFM-gamedata" target="_blank" rel="noopener">github.com/sg4e/YGOFM-gamedata</a> e conferida na <a href="https://yugipedia.com/wiki/Yu-Gi-Oh!_Forbidden_Memories" target="_blank" rel="noopener">Yugipedia</a>.
-        Números, ATK/DEF, tipos e guardian stars das 722 cartas são idênticos entre o Mod 13 e o original — o mod altera só os drops (348 entradas).</p>
+        Números, ATK/DEF, tipos e guardian stars das 722 cartas são idênticos entre o Mod 13 e o original — o mod altera os drops (348 entradas) e 35 combinações de fusão.</p>
+        <p>A <b>tabela de fusões</b> também foi lida da ISO do Mod 13 (25.160 combinações). As diferenças para o jogo original foram conferidas com duas bases públicas do jogo original, e só entram no comparativo as que as duas confirmam.</p>
         <h3>Como funciona o drop</h3>
         <p>Ao vencer, o jogo sorteia <b>1 carta</b> do pool do duelista correspondente ao seu rank: S/A-POW (vitória por força), S/A-TEC (vitória técnica) ou B/C/D (ranks baixos). A chance é <i>N</i>/2048 por duelo.</p>
         <h3 id="privacidade">Contas, ranking e privacidade</h3>
@@ -653,6 +656,7 @@
     D.rituals.forEach(r => { RIT_BY_RES[r.res] = r; RIT_BY_CARD[r.r] = r; });
     if (!D.pools[S.ver]) S.ver = "mod13";
     window.FMD = { S, D, CARD, DUEL, render, route, toast, saveSets, esc, pad, img, EXTRA_VIEWS, STAR_PT, TYPE_PT, CAT_PT };
+    if (window.FMFusions) window.FMFusions.init();
     if (window.FMOnline) window.FMOnline.init();
     drawVer(); render(); privacyNotice();
   }).catch(() => { $("#app").innerHTML = `<div class="empty">Não foi possível carregar os dados. Se abriu o arquivo direto do disco, use um servidor local ou o GitHub Pages.</div>`; });

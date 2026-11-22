@@ -42,6 +42,7 @@ Observações:
 - A pontuação é calculada no servidor a partir da tabela `card_stats`; o navegador não consegue inventar pontos.
 - Projetos grátis do Supabase pausam após 7 dias sem nenhum acesso; basta reativar no painel.
 - Para regerar o SQL após mudar dados: `python tools/build_sql.py`.
+- Para regerar as fusões a partir da ISO: `python tools/extract_fusions.py "CAMINHO/Yu-Gi-Oh! Forbidden Memories (PT-BR).bin" mod13 --original fusions.json --confirm fusions2.js` (referências do jogo original: fusions.json do sg4e/YGOFM-gamedata e outra base pública; só entram no comparativo as diferenças que as duas confirmam).
 
 ## Publicar no GitHub Pages
 1. Repositório: https://github.com/brandaobrunobr-lgtm/fmdrops-yugioh (site: https://brandaobrunobr-lgtm.github.io/fmdrops-yugioh/).
